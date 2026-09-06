@@ -1,0 +1,32 @@
+DSi-FC-Men – MicroSD Setup Instructions
+=======================================
+
+METHOD 1 – Easiest (Setupper CIA)
+---------------------------------
+1. Download DSi-FC-Men-Setupper.cia from Releases
+2. Install it with FBI on your 3DS
+3. Launch "DSi-FC-Men Setupper"
+4. Press A → all folders + config are created automatically
+5. Copy your .nds ROMs to /roms/nds/ on the microSD
+6. (Optional) Download nds-bootstrap and put files into /_nds/nds-bootstrap/
+
+METHOD 2 – Manual (SD-Setup Zip)
+--------------------------------
+1. Download DSi-FC-Men-SD-Setup.zip from Releases
+2. Extract the zip to the ROOT of your microSD card
+3. You should now have:
+     /_nds/DSi-FC-Men/
+     /_nds/nds-bootstrap/
+     /roms/nds/
+     /saves/
+4. Put .nds ROMs into /roms/nds/
+5. Put nds-bootstrap files into /_nds/nds-bootstrap/
+
+METHOD 3 – Flashcard Autoboot (advanced)
+----------------------------------------
+Depending on your flashcard (R4, Ace3DS, DSTT, etc.) you may need
+specific .dat / .sys / BOOT.NDS files for autoboot.
+Those will be added in a later release for popular carts.
+
+After setup you can launch the main DSi-FC-Men menu
+(or use your flashcard kernel + nds-bootstrap).

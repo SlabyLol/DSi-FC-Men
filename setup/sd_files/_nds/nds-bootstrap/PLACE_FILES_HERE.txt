@@ -1,0 +1,12 @@
+nds-bootstrap files go here
+===========================
+
+Download the latest release from:
+https://github.com/DS-Homebrew/nds-bootstrap/releases
+
+Extract and place at least:
+  nds-bootstrap-release.nds
+  (and any accompanying .ver / config files)
+
+This folder is required for launching .nds ROMs
+when DefaultLauncher = nds-bootstrap
