@@ -17,109 +17,93 @@ jobs:
       DEVKITPRO: /opt/devkitpro
       DEVKITARM: /opt/devkitpro/devkitARM
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Install 3DS SDK
-      run: |
-        set -ex
-        export DEVKITPRO=/opt/devkitpro
-        if command -v dkp-pacman >/dev/null 2>&1; then
-          dkp-pacman -Sy --noconfirm
-          dkp-pacman -S --noconfirm 3ds-dev 3ds-libctru 3ds-citro3d 3ds-citro2d 3ds-zlib general-tools 3ds-tools || true
-        fi
-        ls -la /opt/devkitpro/libctru/include/3ds.h
-        which smdhtool || true
+      - name: Install 3DS SDK
+        run: |
+          set -ex
+          export DEVKITPRO=/opt/devkitpro
+          if command -v dkp-pacman >/dev/null 2>&1; then
+            dkp-pacman -Sy --noconfirm
+            dkp-pacman -S --noconfirm 3ds-dev 3ds-libctru 3ds-citro3d 3ds-citro2d 3ds-zlib general-tools 3ds-tools || true
+          fi
+          ls -la /opt/devkitpro/libctru/include/3ds.h
+          which smdhtool || true
 
-    - name: Host tools + ensure assets
-      run: |
-        apt-get update -qq || true
-        apt-get install -y -qq git cmake make g++ zip unzip wget curl python3 || true
-        mkdir -p assets source romfs/sounds setup/sd_files
-        python3 << 'PY'
-import struct, zlib
-from pathlib import Path
+      - name: Install host tools
+        run: |
+          apt-get update -qq || true
+          apt-get install -y -qq git cmake make g++ zip unzip wget curl python3 || true
+          mkdir -p assets source romfs/sounds setup/sd_files tools
 
-def png(w,h,rgb_fn):
-    raw=b''
-    for y in range(h):
-        raw+=b'\x00'
-        for x in range(w):
-            r,g,b=rgb_fn(x,y)
-            raw+=bytes([r,g,b])
-    def chunk(t,d):
-        return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
-    ihdr=struct.pack('>IIBBBBB',w,h,8,2,0,0,0)
-    return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',ihdr)+chunk(b'IDAT',zlib.compress(raw,9))+chunk(b'IEND',b'')
+      - name: Ensure assets
+        run: |
+          python3 tools/gen_assets.py || python3 -c "print('gen_assets missing, skip')"
+          ls -la assets/ || true
 
-Path('assets').mkdir(exist_ok=True)
-if not Path('assets/icon.png').exists():
-    Path('assets/icon.png').write_bytes(png(48,48, lambda x,y: (10,30,60) if 12<x<36 and 12<y<36 else (8,12,28)))
-    print('generated icon.png')
-if not Path('assets/banner.png').exists():
-    Path('assets/banner.png').write_bytes(png(256,128, lambda x,y: (0,180,255) if y>100 else (8,12,28)))
-    print('generated banner.png')
-if not Path('assets/banner.wav').exists():
-    import wave
-    with wave.open('assets/banner.wav','w') as w:
-        w.setnchannels(1); w.setsampwidth(2); w.setframerate(44100)
-        w.writeframes(b'\x00\x00'*1000)
-if not Path('assets/cia.rsf').exists():
-    Path('assets/cia.rsf').write_text('''BasicInfo:\n  Title: "DSi-FC-Men"\n  CompanyCode: "00"\n  ProductCode: "CTR-P-DSIFC"\n  ContentType: Application\n  Logo: Nintendo\nTitleInfo:\n  UniqueId: 0x445343\n  Category: Application\nOption:\n  UseOnSD: true\n  FreeProductCode: true\n  EnableCompress: true\nAccessControlInfo:\n  CoreVersion: 2\n  MemoryType: Application\n  SystemMode: 64MB\n  IdealProcessor: 0\n  Priority: 16\nSystemControlInfo:\n  SaveDataSize: 0KB\n  StackSize: 0x40000\n''')
-print('assets ready')
-PY
+      - name: Build BannerTool
+        run: |
+          git clone --depth 1 https://github.com/carstene1ns/3ds-bannertool.git
+          cd 3ds-bannertool
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j$(nproc)
+          cmake --install build 2>/dev/null || cp build/bannertool /usr/local/bin/ || true
 
-    - name: BannerTool
-      run: |
-        git clone --depth 1 https://github.com/carstene1ns/3ds-bannertool.git
-        cd 3ds-bannertool && cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j$(nproc)
-        cmake --install build 2>/dev/null || cp build/bannertool /usr/local/bin/ || true
+      - name: Build Makerom
+        run: |
+          git clone --depth 1 --recursive https://github.com/3DSGuy/Project_CTR.git
+          cd Project_CTR/makerom
+          make deps || true
+          make -j$(nproc)
+          cp -f bin/makerom /usr/local/bin/makerom
+          chmod +x /usr/local/bin/makerom
 
-    - name: Makerom
-      run: |
-        git clone --depth 1 --recursive https://github.com/3DSGuy/Project_CTR.git
-        cd Project_CTR/makerom && make deps || true && make -j$(nproc)
-        cp -f bin/makerom /usr/local/bin/makerom && chmod +x /usr/local/bin/makerom
+      - name: Build 3DSX
+        run: |
+          set -ex
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITARM=/opt/devkitpro/devkitARM
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:/usr/local/bin:$PATH"
+          if [ -f /etc/profile.d/devkit-env.sh ]; then
+            . /etc/profile.d/devkit-env.sh || true
+          fi
+          make clean || true
+          make -j$(nproc) all
+          ls -la DSi-FC-Men.* || true
 
-    - name: Build 3DSX
-      run: |
-        set -ex
-        export DEVKITPRO=/opt/devkitpro DEVKITARM=/opt/devkitpro/devkitARM
-        export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:/usr/local/bin:$PATH"
-        [ -f /etc/profile.d/devkit-env.sh ] && . /etc/profile.d/devkit-env.sh || true
-        make clean || true
-        make -j$(nproc) all
-        ls -la DSi-FC-Men.* || true
+      - name: Build CIA
+        run: |
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITARM=/opt/devkitpro/devkitARM
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:/usr/local/bin:$PATH"
+          make cia || true
+          ls -la DSi-FC-Men.cia 2>/dev/null || true
 
-    - name: Build CIA
-      run: |
-        export DEVKITPRO=/opt/devkitpro DEVKITARM=/opt/devkitpro/devkitARM
-        export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:/usr/local/bin:$PATH"
-        make cia || true
-        ls -la DSi-FC-Men.cia 2>/dev/null || true
+      - name: Package release
+        run: |
+          mkdir -p release
+          cp -v DSi-FC-Men.cia DSi-FC-Men.3dsx release/ 2>/dev/null || true
+          cp -v assets/icon.png assets/banner.png release/ 2>/dev/null || true
+          mkdir -p setup/sd_files/_nds/DSi-FC-Men/sounds
+          (cd setup/sd_files && zip -r ../../release/DSi-FC-Men-SD-Setup.zip .) || true
+          ls -la release/
 
-    - name: Package
-      run: |
-        mkdir -p release
-        cp -v DSi-FC-Men.cia DSi-FC-Men.3dsx release/ 2>/dev/null || true
-        cp -v assets/icon.png assets/banner.png release/ 2>/dev/null || true
-        mkdir -p setup/sd_files/_nds/DSi-FC-Men/sounds
-        (cd setup/sd_files && zip -r ../../release/DSi-FC-Men-SD-Setup.zip .) || true
-        ls -la release/
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DSi-FC-Men
+          path: release/
+          if-no-files-found: warn
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: DSi-FC-Men
-        path: release/
-        if-no-files-found: warn
-
-    - name: Nightly
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: nightly
-        name: "Nightly – DSi-FC-Men"
-        prerelease: true
-        body: "One CIA – FBI install – FlashCard / Device SD setup"
-        files: release/*
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Nightly Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: Nightly - DSi-FC-Men
+          prerelease: true
+          body: One CIA - install with FBI - FlashCard / Device SD setup
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
