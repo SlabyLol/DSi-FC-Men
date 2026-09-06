@@ -1,4 +1,4 @@
-name: Build Nintendo 3DS CIA
+name: Build DSi-FC-Men CIA
 
 on:
   push:
@@ -14,68 +14,43 @@ jobs:
     container:
       image: devkitpro/devkitarm
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Install deps
       run: |
         apt-get update -qq || true
-        apt-get install -y -qq git cmake make g++ zip unzip wget curl p7zip-full || true
+        apt-get install -y -qq git cmake make g++ zip unzip wget curl || true
 
-    - name: Build BannerTool
+    - name: BannerTool
       run: |
-        git clone --depth 1 https://github.com/carstene1ns/3ds-bannertool.git || true
-        if [ -d 3ds-bannertool ]; then
-          cd 3ds-bannertool
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j$(nproc) || true
-          cmake --install build || true
-        fi
+        git clone --depth 1 https://github.com/carstene1ns/3ds-bannertool.git
+        cd 3ds-bannertool && cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake --build build -j$(nproc) && cmake --install build || true
 
-    - name: Build Makerom
+    - name: Makerom
       run: |
-        git clone --depth 1 --recursive https://github.com/3DSGuy/Project_CTR.git || true
-        if [ -d Project_CTR/makerom ]; then
-          cd Project_CTR/makerom
-          make deps || true
-          make -j$(nproc) || true
-          cp -f ./bin/makerom /usr/local/bin/makerom 2>/dev/null || true
-          chmod +x /usr/local/bin/makerom 2>/dev/null || true
-        fi
+        git clone --depth 1 --recursive https://github.com/3DSGuy/Project_CTR.git
+        cd Project_CTR/makerom && make deps && make -j$(nproc)
+        cp -f bin/makerom /usr/local/bin/makerom && chmod +x /usr/local/bin/makerom || true
 
-    - name: Build Setupper
-      working-directory: setupper
+    - name: Build 3DSX + CIA
       run: |
         make clean || true
-        make all || echo "Setupper make status $?"
-        ls -la *.3dsx *.elf *.smdh 2>/dev/null || ls -la
+        make all || echo "3dsx status $?"
+        make cia || echo "cia status $?"
+        ls -la DSi-FC-Men.* 2>/dev/null || ls -la
 
-    - name: Build Main Menu
-      working-directory: source
-      run: |
-        make clean || true
-        make all || echo "Main menu make status $?"
-        ls -la *.3dsx *.elf *.smdh 2>/dev/null || ls -la
-
-    - name: Package SD Setup with sounds
+    - name: Package release
       run: |
         mkdir -p release
+        cp -v DSi-FC-Men.cia DSi-FC-Men.3dsx release/ 2>/dev/null || true
+        cp -v assets/icon.png assets/banner.png release/ 2>/dev/null || true
         mkdir -p setup/sd_files/_nds/DSi-FC-Men/sounds
-        if [ -d assets/sounds ]; then
-          cp -v assets/sounds/*.wav setup/sd_files/_nds/DSi-FC-Men/sounds/ 2>/dev/null || true
-          cp -v assets/sounds/CREDITS.txt setup/sd_files/_nds/DSi-FC-Men/sounds/ 2>/dev/null || true
-        fi
-        cp -v setupper/*.3dsx release/ 2>/dev/null || true
-        cp -v setupper/*.cia release/ 2>/dev/null || true
-        cp -v source/*.3dsx release/ 2>/dev/null || true
-        cd setup/sd_files && zip -r ../../release/DSi-FC-Men-SD-Setup.zip . && cd ../..
-        if ls setup/sd_files/_nds/DSi-FC-Men/sounds/*.wav 1>/dev/null 2>&1; then
-          (cd setup/sd_files/_nds/DSi-FC-Men/sounds && zip -r ../../../../release/DSi-FC-Men-Sounds.zip ./*.wav ./CREDITS.txt) || true
-        fi
+        cp -v assets/sounds/*.wav setup/sd_files/_nds/DSi-FC-Men/sounds/ 2>/dev/null || true
+        (cd setup/sd_files && zip -r ../../release/DSi-FC-Men-SD-Setup.zip .)
         ls -la release/
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
         name: DSi-FC-Men
         path: release/
@@ -89,14 +64,15 @@ jobs:
         name: "Nightly – DSi-FC-Men"
         prerelease: true
         body: |
-          **DSi-FC-Men Nightly**
-          - `DSi-FC-Men-SD-Setup.zip` – microSD structure + modern sounds
-          - `DSi-FC-Men-Sounds.zip` – sounds only
-          - Setupper / menu binaries when build succeeds
+          **One CIA – does everything**
 
-          1. Extract SD-Setup zip to microSD root
-          2. ROMs → `/roms/nds/`
-          3. nds-bootstrap → `/_nds/nds-bootstrap/`
+          1. Install `DSi-FC-Men.cia` with FBI
+          2. Launch once → folders + config are created automatically
+          3. Put ROMs in `/roms/nds/`
+          4. Put nds-bootstrap in `/_nds/nds-bootstrap/`
+          5. Optional: extract SD-Setup zip for sounds/templates
+
+          SELECT = BGM on/off · START = exit
         files: release/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
