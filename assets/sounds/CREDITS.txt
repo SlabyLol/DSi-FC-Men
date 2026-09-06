@@ -1,0 +1,20 @@
+Sound effects for DSi-FC-Men
+============================
+
+Source: UI Sound Effects by Robin Lamb
+OpenGameArt.org – CC0 (Public Domain)
+https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications
+
+Mapped as:
+  menu_move.wav   ← click_1.wav
+  menu_select.wav ← click_2.wav
+  menu_back.wav   ← click_3.wav
+  splash.wav      ← chimes.wav
+  menu_click.wav  ← click_4.wav
+  menu_confirm.wav← Ding.wav
+
+You may use these freely without attribution (CC0).
+
+The .wav files are in the repo release / local assets folder.
+Place them on the microSD at:
+  /_nds/DSi-FC-Men/sounds/

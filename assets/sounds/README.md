@@ -1,24 +1,25 @@
 # Sounds for DSi-FC-Men
 
-Place your sound files in this folder on the microSD:
+Place these files on the microSD:
 
 ```
 /_nds/DSi-FC-Men/sounds/
 ```
 
-## Expected files
-| File              | When it plays          |
-|-------------------|------------------------|
-| `menu_move.bcwav` | Cursor moves up/down   |
-| `menu_select.bcwav` | Confirm / launch     |
-| `menu_back.bcwav` | Go back / cancel       |
-| `splash.bcwav`    | During splash screen   |
+| File | When it plays |
+|------|----------------|
+| `menu_move.wav` | Cursor up/down |
+| `menu_select.wav` | Confirm / launch |
+| `menu_back.wav` | Go back |
+| `splash.wav` | Splash screen |
+| `menu_click.wav` | Extra click (optional) |
+| `menu_confirm.wav` | Extra confirm (optional) |
 
-Supported formats (planned):
-- `.bcwav` (recommended for 3DS)
-- `.wav` (PCM)
+**License:** CC0 (Public Domain) – see `CREDITS.txt`
 
-You can disable all sounds in `config.ini`:
+Source pack: [OpenGameArt UI Sound Effects](https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications) by Robin Lamb
+
+Enable in config:
 ```ini
-EnableSounds = false
+EnableSounds = true
 ```

@@ -1,11 +1,17 @@
-Sounds folder
-=============
+Sounds folder – DSi-FC-Men
+==========================
 
-Place these files here (optional):
-  menu_move.bcwav   or .wav
-  menu_select.bcwav or .wav
-  menu_back.bcwav   or .wav
-  splash.bcwav      or .wav
+Required / used files:
+  menu_move.wav
+  menu_select.wav
+  menu_back.wav
+  splash.wav
 
-Enable/disable in config.ini:
-  EnableSounds = true
+Optional:
+  menu_click.wav
+  menu_confirm.wav
+
+License: CC0 (Public Domain)
+See CREDITS.txt
+
+EnableSounds = true in config.ini
