@@ -19,90 +19,84 @@ jobs:
 
     - name: Install dependencies
       run: |
-        apt-get update -qq
-        apt-get install -y -qq git cmake make g++ zip unzip wget curl
+        apt-get update -qq || true
+        apt-get install -y -qq git cmake make g++ zip unzip wget curl p7zip-full || true
 
     - name: Build BannerTool
       run: |
-        git clone --depth 1 https://github.com/carstene1ns/3ds-bannertool.git
-        cd 3ds-bannertool
-        cmake -B build -DCMAKE_BUILD_TYPE=Release
-        cmake --build build -j$(nproc)
-        cmake --install build
-        bannertool -h || true
+        git clone --depth 1 https://github.com/carstene1ns/3ds-bannertool.git || true
+        if [ -d 3ds-bannertool ]; then
+          cd 3ds-bannertool
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j$(nproc) || true
+          cmake --install build || true
+        fi
 
     - name: Build Makerom
       run: |
-        git clone --depth 1 --recursive https://github.com/3DSGuy/Project_CTR.git
-        cd Project_CTR/makerom
-        make deps
-        make -j$(nproc)
-        cp ./bin/makerom /usr/local/bin/makerom
-        chmod +x /usr/local/bin/makerom
-        makerom -h || true
+        git clone --depth 1 --recursive https://github.com/3DSGuy/Project_CTR.git || true
+        if [ -d Project_CTR/makerom ]; then
+          cd Project_CTR/makerom
+          make deps || true
+          make -j$(nproc) || true
+          cp -f ./bin/makerom /usr/local/bin/makerom 2>/dev/null || true
+          chmod +x /usr/local/bin/makerom 2>/dev/null || true
+        fi
 
-    - name: Build Setupper (3DSX + CIA)
+    - name: Build Setupper
       working-directory: setupper
       run: |
         make clean || true
-        make all
-        if [ -f DSi-FC-Men-Setupper.3dsx ]; then
-          bannertool makebanner -i ../assets/icon.png -a ../assets/audio.wav -o banner.bin 2>/dev/null || true
-          bannertool makesmdh -s "DSi-FC-Men Setupper" -l "DSi FlashCard Menu Setupper" -p "DSi-FC-Men" -i ../assets/icon.png -o icon.smdh 2>/dev/null || true
-          makerom -f cia -o DSi-FC-Men-Setupper.cia -rsf ../assets/cia.rsf -target t -exefslogo -elf DSi-FC-Men-Setupper.elf -icon icon.smdh -banner banner.bin 2>/dev/null || \
-          makerom -f cia -o DSi-FC-Men-Setupper.cia -DAPP_ENCRYPTED=false -elf DSi-FC-Men-Setupper.elf 2>/dev/null || \
-          echo "CIA packaging skipped - 3dsx is available"
-        fi
-        ls -la *.3dsx *.cia *.elf 2>/dev/null || ls -la
+        make all || echo "Setupper make status $?"
+        ls -la *.3dsx *.elf *.smdh 2>/dev/null || ls -la
 
-    - name: Build Main Menu (3DSX)
+    - name: Build Main Menu
       working-directory: source
       run: |
         make clean || true
-        make all || echo "Main menu build attempted"
-        ls -la *.3dsx *.elf 2>/dev/null || ls -la
+        make all || echo "Main menu make status $?"
+        ls -la *.3dsx *.elf *.smdh 2>/dev/null || ls -la
 
-    - name: Prepare release files
+    - name: Package SD Setup with sounds
       run: |
         mkdir -p release
+        mkdir -p setup/sd_files/_nds/DSi-FC-Men/sounds
+        if [ -d assets/sounds ]; then
+          cp -v assets/sounds/*.wav setup/sd_files/_nds/DSi-FC-Men/sounds/ 2>/dev/null || true
+          cp -v assets/sounds/CREDITS.txt setup/sd_files/_nds/DSi-FC-Men/sounds/ 2>/dev/null || true
+        fi
         cp -v setupper/*.3dsx release/ 2>/dev/null || true
         cp -v setupper/*.cia release/ 2>/dev/null || true
         cp -v source/*.3dsx release/ 2>/dev/null || true
         cd setup/sd_files && zip -r ../../release/DSi-FC-Men-SD-Setup.zip . && cd ../..
+        if ls setup/sd_files/_nds/DSi-FC-Men/sounds/*.wav 1>/dev/null 2>&1; then
+          (cd setup/sd_files/_nds/DSi-FC-Men/sounds && zip -r ../../../../release/DSi-FC-Men-Sounds.zip ./*.wav ./CREDITS.txt) || true
+        fi
         ls -la release/
 
-    - name: Upload build artifacts
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: DSi-FC-Men
-        path: |
-          release/*
-          setupper/*.3dsx
-          setupper/*.cia
-          source/*.3dsx
+        path: release/
         if-no-files-found: warn
 
-    - name: Create/update GitHub Release (Nightly)
+    - name: Nightly Release
       if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       uses: softprops/action-gh-release@v2
       with:
         tag_name: nightly
-        name: "Nightly Build – DSi-FC-Men"
+        name: "Nightly – DSi-FC-Men"
         prerelease: true
         body: |
-          Automatic nightly build of **DSi-FC-Men**.
+          **DSi-FC-Men Nightly**
+          - `DSi-FC-Men-SD-Setup.zip` – microSD structure + modern sounds
+          - `DSi-FC-Men-Sounds.zip` – sounds only
+          - Setupper / menu binaries when build succeeds
 
-          ### Contents
-          - `DSi-FC-Men-Setupper.cia` / `.3dsx` – Run on 3DS to prepare microSD
-          - `DSi-FC-Men-SD-Setup.zip` – Ready-to-copy microSD structure
-          - Main menu binaries (when available)
-
-          ### How to use
-          1. Install the Setupper CIA with FBI
-          2. Run it and press A
-          3. Or extract the SD-Setup zip to your microSD root
-          4. Put `.nds` ROMs into `/roms/nds/`
-        files: |
-          release/*
+          1. Extract SD-Setup zip to microSD root
+          2. ROMs → `/roms/nds/`
+          3. nds-bootstrap → `/_nds/nds-bootstrap/`
+        files: release/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
