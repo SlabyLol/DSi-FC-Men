@@ -46,6 +46,8 @@ int main(int argc, char* argv[]) {
         splash_show(cfg.splash_duration);
     }
 
+    sound_bgm_play();
+
     filebrowser_init(&cfg);
 
     while (aptMainLoop() && running) {
@@ -54,6 +56,12 @@ int main(int argc, char* argv[]) {
         if (kDown & KEY_START) {
             running = false;
             break;
+        }
+        if (kDown & KEY_SELECT) {
+            static bool bgm_on = true;
+            bgm_on = !bgm_on;
+            if (bgm_on) sound_bgm_play();
+            else sound_bgm_stop();
         }
 
         filebrowser_update(&cfg, kDown);
@@ -66,6 +74,7 @@ int main(int argc, char* argv[]) {
         C3D_FrameEnd(0);
     }
 
+    sound_bgm_stop();
     sound_exit();
     config_free(&cfg);
     exit_graphics();

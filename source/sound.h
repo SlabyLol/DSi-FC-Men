@@ -4,9 +4,6 @@
 #include <stdbool.h>
 #include "config.h"
 
-// Simple sound system foundation
-// Full implementation will use ndsp / bcwav loading
-
 typedef enum {
     SOUND_MOVE = 0,
     SOUND_SELECT,
@@ -19,5 +16,10 @@ bool sound_init(const Config* cfg);
 void sound_exit(void);
 void sound_play(SoundId id);
 void sound_set_enabled(bool enabled);
+
+/* Looping menu background music */
+void sound_bgm_play(void);
+void sound_bgm_stop(void);
+void sound_bgm_set_enabled(bool enabled);
 
 #endif
