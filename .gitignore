@@ -1,0 +1,22 @@
+# Build
+build/
+*.o
+*.d
+*.elf
+*.3dsx
+*.smdh
+*.cia
+*.map
+
+# IDE
+.vscode/
+.idea/
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+*.log
