@@ -16,40 +16,43 @@ jobs:
     env:
       DEVKITPRO: /opt/devkitpro
       DEVKITARM: /opt/devkitpro/devkitARM
-      PATH: /opt/devkitpro/devkitARM/bin:/opt/devkitpro/tools/bin:/opt/devkitpro/portlibs/3ds/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Setup devkitPro 3DS packages
+    - name: Install 3DS SDK (libctru, citro2d, tools)
       run: |
-        set -e
-        echo "DEVKITPRO=$DEVKITPRO"
+        set -ex
+        export DEVKITPRO=/opt/devkitpro
+        export DEVKITARM=/opt/devkitpro/devkitARM
         ls -la /opt/devkitpro/ || true
-        if [ ! -f /opt/devkitpro/3ds_rules ]; then
-          echo "Installing 3ds-dev..."
-          dkp-pacman -Sy --noconfirm 3ds-dev 3ds-libctru 3ds-citro3d 3ds-citro2d 3ds-zlib general-tools 3ds-tools || \
-          pacman -Sy --noconfirm 3ds-dev 3ds-libctru 3ds-citro3d 3ds-citro2d || true
+        if command -v dkp-pacman >/dev/null 2>&1; then
+          dkp-pacman -Sy --noconfirm
+          dkp-pacman -S --noconfirm 3ds-dev || true
+          dkp-pacman -S --noconfirm 3ds-libctru 3ds-citro3d 3ds-citro2d 3ds-zlib 3ds-libpng || true
+          dkp-pacman -S --noconfirm general-tools 3ds-tools devkitarm-rules || true
+        elif command -v pacman >/dev/null 2>&1; then
+          pacman -Sy --noconfirm
+          pacman -S --noconfirm 3ds-dev 3ds-libctru 3ds-citro3d 3ds-citro2d || true
         fi
-        ls -la /opt/devkitpro/3ds_rules || ls -la /opt/devkitpro/devkitARM/ || true
-        which arm-none-eabi-gcc || true
-        which 3dsxtool || true
+        find /opt/devkitpro -name '3ds.h' 2>/dev/null | head -5 || true
+        find /opt/devkitpro -name '3ds_rules' 2>/dev/null | head -5 || true
+        ls -la /opt/devkitpro/libctru/include/3ds.h 2>/dev/null || true
 
     - name: Install host tools
       run: |
         apt-get update -qq || true
         apt-get install -y -qq git cmake make g++ zip unzip wget curl pkg-config || true
 
-    - name: Build BannerTool
+    - name: BannerTool
       run: |
         git clone --depth 1 https://github.com/carstene1ns/3ds-bannertool.git
         cd 3ds-bannertool
         cmake -B build -DCMAKE_BUILD_TYPE=Release
         cmake --build build -j$(nproc)
-        cmake --install build || cp -v build/bannertool /usr/local/bin/ || true
-        bannertool -h || true
+        cmake --install build 2>/dev/null || cp -v build/bannertool /usr/local/bin/ || true
 
-    - name: Build Makerom
+    - name: Makerom
       run: |
         git clone --depth 1 --recursive https://github.com/3DSGuy/Project_CTR.git
         cd Project_CTR/makerom
@@ -57,19 +60,21 @@ jobs:
         make -j$(nproc)
         cp -f bin/makerom /usr/local/bin/makerom
         chmod +x /usr/local/bin/makerom
-        makerom -h || true
 
     - name: Build 3DSX
       run: |
+        set -ex
         export DEVKITPRO=/opt/devkitpro
         export DEVKITARM=/opt/devkitpro/devkitARM
-        export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$PATH"
-        [ -f /etc/profile.d/devkit-env.sh ] && . /etc/profile.d/devkit-env.sh || true
-        [ -f $DEVKITPRO/devkitarm.sh ] && . $DEVKITPRO/devkitarm.sh || true
-        echo "Using DEVKITPRO=$DEVKITPRO"
-        ls "$DEVKITPRO/3ds_rules" || ls "$DEVKITPRO/devkitARM/" || true
+        export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$DEVKITPRO/portlibs/3ds/bin:/usr/local/bin:$PATH"
+        if [ -f /etc/profile.d/devkit-env.sh ]; then
+          set +e
+          . /etc/profile.d/devkit-env.sh
+          set -e
+        fi
+        ls "$DEVKITPRO/libctru/include/3ds.h" || ls "$DEVKITPRO/libctru/include/3ds/" || true
         make clean || true
-        make -j$(nproc) all
+        make -j$(nproc) all V=1
         ls -la DSi-FC-Men.3dsx DSi-FC-Men.elf DSi-FC-Men.smdh 2>/dev/null || ls -la
 
     - name: Build CIA
@@ -77,7 +82,7 @@ jobs:
         export DEVKITPRO=/opt/devkitpro
         export DEVKITARM=/opt/devkitpro/devkitARM
         export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:/usr/local/bin:$PATH"
-        make cia || echo "CIA step status $?"
+        make cia || echo "CIA status $?"
         ls -la DSi-FC-Men.cia 2>/dev/null || true
 
     - name: Package release
@@ -90,8 +95,7 @@ jobs:
         (cd setup/sd_files && zip -r ../../release/DSi-FC-Men-SD-Setup.zip .)
         ls -la release/
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
         name: DSi-FC-Men
         path: release/
@@ -105,14 +109,7 @@ jobs:
         name: "Nightly – DSi-FC-Men"
         prerelease: true
         body: |
-          **One CIA – auto setup**
-
-          1. Install `DSi-FC-Men.cia` with FBI
-          2. Launch → choose FlashCard / Device SD
-          3. ROMs → `/roms/nds/`
-          4. nds-bootstrap → `/_nds/nds-bootstrap/`
-
-          Controls: Circle Pad + D-Pad + Touch + L/R · SELECT = BGM · START = Exit
+          One CIA – install with FBI, launch, choose FlashCard / Device SD.
         files: release/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

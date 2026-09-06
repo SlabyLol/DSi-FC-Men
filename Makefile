@@ -1,11 +1,11 @@
 #---------------------------------------------------------------------------------
-# DSi-FC-Men – 3DS Makefile (3dsx + CIA)
+# DSi-FC-Men – 3DS Makefile
 #---------------------------------------------------------------------------------
 export DEVKITPRO ?= /opt/devkitpro
 export DEVKITARM ?= $(DEVKITPRO)/devkitARM
 
 ifeq ($(strip $(DEVKITPRO)),)
-$(error "Please set DEVKITPRO in your environment. export DEVKITPRO=/opt/devkitpro")
+$(error "Please set DEVKITPRO. export DEVKITPRO=/opt/devkitpro")
 endif
 
 ifneq ($(wildcard $(DEVKITPRO)/3ds_rules),)
@@ -13,7 +13,7 @@ ifneq ($(wildcard $(DEVKITPRO)/3ds_rules),)
 else ifneq ($(wildcard $(DEVKITPRO)/devkitARM/3ds_rules),)
   include $(DEVKITPRO)/devkitARM/3ds_rules
 else
-  $(error "3ds_rules not found. Install 3ds-dev: dkp-pacman -S 3ds-dev")
+  $(error "3ds_rules not found under $(DEVKITPRO). Run: dkp-pacman -S 3ds-dev")
 endif
 
 TARGET		:=	DSi-FC-Men
@@ -25,7 +25,10 @@ ROMFS		:=	romfs
 APP_TITLE		:=	DSi-FC-Men
 APP_DESCRIPTION	:=	DSi FlashCard Menu
 APP_AUTHOR		:=	SlabyLol
-APP_ICON		:=	assets/icon.png
+
+LIBCTRU_INC	:=	$(DEVKITPRO)/libctru/include
+LIBCTRU_LIB	:=	$(DEVKITPRO)/libctru/lib
+PORTLIBS	:=	$(DEVKITPRO)/portlibs/3ds
 
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CFLAGS	:=	-g -Wall -O2 -mword-relocations -ffunction-sections $(ARCH)
@@ -54,32 +57,21 @@ endif
 
 export OFILES_SOURCES 	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
 export OFILES := $(OFILES_SOURCES)
+
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+			-I$(LIBCTRU_INC) \
+			-I$(PORTLIBS)/include \
 			-I$(CURDIR)/$(BUILD)
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
-export _3DSXDEPS	:=	$(if $(NO_SMDH),,$(OUTPUT).smdh)
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
+			-L$(LIBCTRU_LIB) \
+			-L$(PORTLIBS)/lib
 
-ifeq ($(strip $(ICON)),)
-	icons := $(wildcard *.png)
-	ifneq (,$(findstring $(TARGET).png,$(icons)))
-		export APP_ICON := $(TOPDIR)/$(TARGET).png
-	else
-		ifneq (,$(findstring icon.png,$(icons)))
-			export APP_ICON := $(TOPDIR)/icon.png
-		endif
-	endif
-else
-	export APP_ICON := $(TOPDIR)/$(ICON)
-endif
-
-ifeq ($(strip $(NO_SMDH)),)
-	export _3DSXFLAGS += --smdh=$(CURDIR)/$(TARGET).smdh
-endif
-
+export APP_ICON := $(TOPDIR)/assets/icon.png
+export _3DSXFLAGS := --smdh=$(CURDIR)/$(TARGET).smdh
 ifneq ($(ROMFS),)
-	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
+export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
 .PHONY: all clean cia release
@@ -90,7 +82,7 @@ $(BUILD):
 	@mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
-$(OUTPUT).3dsx	:	$(OUTPUT).elf $(_3DSXDEPS)
+$(OUTPUT).3dsx	:	$(OUTPUT).elf $(OUTPUT).smdh
 $(OUTPUT).elf	:	$(OFILES)
 
 cia: all
@@ -107,27 +99,22 @@ cia: all
 		makerom -f cia -o $(TARGET).cia -DAPP_ENCRYPTED=false -elf $(OUTPUT).elf -icon $(TARGET).smdh ; \
 		echo "-> $(TARGET).cia" ; \
 	else \
-		echo "makerom not found – CIA skipped" ; \
+		echo "makerom not found" ; \
 	fi
 
 release: cia
 	@mkdir -p release
 	@cp -v $(TARGET).cia $(TARGET).3dsx release/ 2>/dev/null || true
-	@cp -v assets/icon.png assets/banner.png release/ 2>/dev/null || true
 	@(cd setup/sd_files && zip -r ../../release/DSi-FC-Men-SD-Setup.zip .)
-	@echo "Release packaged."
 
 clean:
-	@echo clean ...
 	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(TARGET).cia $(TARGET).map release
 
 else
 
 DEPENDS	:=	$(OFILES:.o=.d)
-
-$(OUTPUT).3dsx	:	$(OUTPUT).elf $(_3DSXDEPS)
+$(OUTPUT).3dsx	:	$(OUTPUT).elf $(OUTPUT).smdh
 $(OUTPUT).elf	:	$(OFILES)
-
--include $(DEPSDIR)/*.d
+-include $(DEPENDS)
 
 endif
