@@ -1,19 +1,15 @@
 #---------------------------------------------------------------------------------
-# DSi-FC-Men – 3DS Makefile
-#---------------------------------------------------------------------------------
 export DEVKITPRO ?= /opt/devkitpro
 export DEVKITARM ?= $(DEVKITPRO)/devkitARM
 
 ifeq ($(strip $(DEVKITPRO)),)
-$(error "Please set DEVKITPRO. export DEVKITPRO=/opt/devkitpro")
+$(error "Please set DEVKITPRO")
 endif
 
 ifneq ($(wildcard $(DEVKITPRO)/3ds_rules),)
-  include $(DEVKITPRO)/3ds_rules
-else ifneq ($(wildcard $(DEVKITPRO)/devkitARM/3ds_rules),)
-  include $(DEVKITPRO)/devkitARM/3ds_rules
+include $(DEVKITPRO)/3ds_rules
 else
-  $(error "3ds_rules not found under $(DEVKITPRO). Run: dkp-pacman -S 3ds-dev")
+include $(DEVKITPRO)/devkitARM/3ds_rules
 endif
 
 TARGET		:=	DSi-FC-Men
@@ -25,10 +21,7 @@ ROMFS		:=	romfs
 APP_TITLE		:=	DSi-FC-Men
 APP_DESCRIPTION	:=	DSi FlashCard Menu
 APP_AUTHOR		:=	SlabyLol
-
-LIBCTRU_INC	:=	$(DEVKITPRO)/libctru/include
-LIBCTRU_LIB	:=	$(DEVKITPRO)/libctru/lib
-PORTLIBS	:=	$(DEVKITPRO)/portlibs/3ds
+APP_ICON		:=	assets/icon.png
 
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CFLAGS	:=	-g -Wall -O2 -mword-relocations -ffunction-sections $(ARCH)
@@ -37,6 +30,8 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 LIBS	:=	-lcitro2d -lcitro3d -lctru -lm
+
+LIBDIRS	:=	$(CTRULIB) $(PORTLIBS)
 
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 
@@ -55,39 +50,39 @@ else
 	export LD	:=	$(CXX)
 endif
 
-export OFILES_SOURCES 	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+export OFILES_SOURCES := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
 export OFILES := $(OFILES_SOURCES)
 
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-			-I$(LIBCTRU_INC) \
-			-I$(PORTLIBS)/include \
 			-I$(CURDIR)/$(BUILD)
 
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
-			-L$(LIBCTRU_LIB) \
-			-L$(PORTLIBS)/lib
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
+ifneq ($(wildcard $(TOPDIR)/assets/icon.png),)
 export APP_ICON := $(TOPDIR)/assets/icon.png
-export _3DSXFLAGS := --smdh=$(CURDIR)/$(TARGET).smdh
-ifneq ($(ROMFS),)
-export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: all clean cia release
+ifeq ($(strip $(NO_SMDH)),)
+	export _3DSXFLAGS += --smdh=$(OUTPUT).smdh
+endif
+ifneq ($(ROMFS),)
+	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
+endif
 
-all: $(BUILD) $(OUTPUT).3dsx
+.PHONY: all clean cia
+
+all: $(BUILD)
 
 $(BUILD):
 	@mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
-$(OUTPUT).3dsx	:	$(OUTPUT).elf $(OUTPUT).smdh
-$(OUTPUT).elf	:	$(OFILES)
+clean:
+	@rm -fr $(BUILD) $(TARGET).3dsx $(TARGET).smdh $(TARGET).elf $(TARGET).cia $(TARGET).map
 
 cia: all
 	@echo "Building CIA..."
-	@mkdir -p $(BUILD)
 	@if command -v bannertool >/dev/null 2>&1; then \
 		bannertool makebanner -i assets/banner.png -a assets/banner.wav -o $(BUILD)/banner.bin 2>/dev/null || \
 		bannertool makebanner -i assets/banner.png -o $(BUILD)/banner.bin ; \
@@ -97,24 +92,29 @@ cia: all
 		makerom -f cia -o $(TARGET).cia -rsf assets/cia.rsf -target t -exefslogo \
 			-elf $(OUTPUT).elf -icon $(TARGET).smdh -banner $(BUILD)/banner.bin 2>/dev/null || \
 		makerom -f cia -o $(TARGET).cia -DAPP_ENCRYPTED=false -elf $(OUTPUT).elf -icon $(TARGET).smdh ; \
-		echo "-> $(TARGET).cia" ; \
-	else \
-		echo "makerom not found" ; \
+		ls -la $(TARGET).cia ; \
 	fi
-
-release: cia
-	@mkdir -p release
-	@cp -v $(TARGET).cia $(TARGET).3dsx release/ 2>/dev/null || true
-	@(cd setup/sd_files && zip -r ../../release/DSi-FC-Men-SD-Setup.zip .)
-
-clean:
-	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(TARGET).cia $(TARGET).map release
 
 else
 
+.PHONY: all
 DEPENDS	:=	$(OFILES:.o=.d)
-$(OUTPUT).3dsx	:	$(OUTPUT).elf $(OUTPUT).smdh
-$(OUTPUT).elf	:	$(OFILES)
+
+all: $(OUTPUT).3dsx
+
+$(OUTPUT).3dsx: $(OUTPUT).elf $(OUTPUT).smdh
+	@echo "built ... $(notdir $@)"
+
+$(OUTPUT).elf: $(OFILES)
+	@echo linking $(notdir $@)
+	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+
+$(OUTPUT).smdh: $(APP_ICON)
+	@echo "smdh $(notdir $@)"
+	@smdhtool --create "$(APP_TITLE)" "$(APP_DESCRIPTION)" "$(APP_AUTHOR)" $(APP_ICON) $@ 2>/dev/null || \
+	 bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i $(APP_ICON) -o $@ 2>/dev/null || \
+	 (echo "fallback empty smdh"; touch $@)
+
 -include $(DEPENDS)
 
 endif
