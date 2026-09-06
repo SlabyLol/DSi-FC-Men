@@ -39,8 +39,10 @@ jobs:
 
       - name: Ensure assets
         run: |
-          python3 tools/gen_assets.py || python3 -c "print('gen_assets missing, skip')"
-          ls -la assets/ || true
+          mkdir -p assets tools
+          python3 tools/gen_assets.py
+          ls -la assets/
+          test -f assets/icon.png
 
       - name: Build BannerTool
         run: |

@@ -21,7 +21,6 @@ ROMFS		:=	romfs
 APP_TITLE		:=	DSi-FC-Men
 APP_DESCRIPTION	:=	DSi FlashCard Menu
 APP_AUTHOR		:=	SlabyLol
-APP_ICON		:=	assets/icon.png
 
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CFLAGS	:=	-g -Wall -O2 -mword-relocations -ffunction-sections $(ARCH)
@@ -59,9 +58,8 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
-ifneq ($(wildcard $(TOPDIR)/assets/icon.png),)
-export APP_ICON := $(TOPDIR)/assets/icon.png
-endif
+# ALWAYS absolute path so sub-make in build/ finds the icon
+export APP_ICON := $(CURDIR)/assets/icon.png
 
 ifeq ($(strip $(NO_SMDH)),)
 	export _3DSXFLAGS += --smdh=$(OUTPUT).smdh
@@ -75,7 +73,9 @@ endif
 all: $(BUILD)
 
 $(BUILD):
-	@mkdir -p $@
+	@mkdir -p $@ assets
+	@test -f assets/icon.png || python3 tools/gen_assets.py || true
+	@test -f assets/icon.png || (echo "ERROR: assets/icon.png missing" && exit 1)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 clean:
@@ -84,12 +84,12 @@ clean:
 cia: all
 	@echo "Building CIA..."
 	@if command -v bannertool >/dev/null 2>&1; then \
-		bannertool makebanner -i assets/banner.png -a assets/banner.wav -o $(BUILD)/banner.bin 2>/dev/null || \
-		bannertool makebanner -i assets/banner.png -o $(BUILD)/banner.bin ; \
-		bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i assets/icon.png -o $(TARGET).smdh ; \
+		bannertool makebanner -i $(CURDIR)/assets/banner.png -a $(CURDIR)/assets/banner.wav -o $(BUILD)/banner.bin 2>/dev/null || \
+		bannertool makebanner -i $(CURDIR)/assets/banner.png -o $(BUILD)/banner.bin ; \
+		bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i $(CURDIR)/assets/icon.png -o $(TARGET).smdh ; \
 	fi
 	@if command -v makerom >/dev/null 2>&1; then \
-		makerom -f cia -o $(TARGET).cia -rsf assets/cia.rsf -target t -exefslogo \
+		makerom -f cia -o $(TARGET).cia -rsf $(CURDIR)/assets/cia.rsf -target t -exefslogo \
 			-elf $(OUTPUT).elf -icon $(TARGET).smdh -banner $(BUILD)/banner.bin 2>/dev/null || \
 		makerom -f cia -o $(TARGET).cia -DAPP_ENCRYPTED=false -elf $(OUTPUT).elf -icon $(TARGET).smdh ; \
 		ls -la $(TARGET).cia ; \
@@ -110,10 +110,10 @@ $(OUTPUT).elf: $(OFILES)
 	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
 
 $(OUTPUT).smdh: $(APP_ICON)
-	@echo "smdh $(notdir $@)"
-	@smdhtool --create "$(APP_TITLE)" "$(APP_DESCRIPTION)" "$(APP_AUTHOR)" $(APP_ICON) $@ 2>/dev/null || \
-	 bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i $(APP_ICON) -o $@ 2>/dev/null || \
-	 (echo "fallback empty smdh"; touch $@)
+	@echo "smdh from $(APP_ICON)"
+	@smdhtool --create "$(APP_TITLE)" "$(APP_DESCRIPTION)" "$(APP_AUTHOR)" "$(APP_ICON)" $@ 2>/dev/null || \
+	 bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i "$(APP_ICON)" -o $@ 2>/dev/null || \
+	 (echo "WARNING: smdhtool/bannertool failed, touching empty smdh"; touch $@)
 
 -include $(DEPENDS)
 
